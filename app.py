@@ -3,24 +3,57 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-st.set_page_config(page_title="No-Fly Zone Debug", page_icon="💸")
-st.title("💸 No-Fly Zone: Debug Mode")
+# Page config for the mobile look
+st.set_page_config(page_title="No-Fly Zone", page_icon="💸", layout="centered")
 
-# --- DEBUG SECTION ---
-with st.expander("🔍 Connection Debugger"):
-    try:
-        secret_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-        st.write(f"✅ Secret URL found: `{secret_url}`")
-    except Exception as e:
-        st.error(f"❌ Could not find the Secret URL. Error: {e}")
-# ---------------------
+st.title("💸 No-Fly Zone")
+st.subheader("Stop the leak, build the empire.")
 
+# Establish Connection
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Form for data entry
+with st.form("entry_form", clear_on_submit=True):
+    amount = st.number_input("Amount (GHS)", min_value=0.0, step=1.0)
+    category = st.selectbox("Where did it go?", [
+        "Food/Water", 
+        "Business/Tech", 
+        "Vibes/AJ", 
+        "Transport", 
+        "Family Support", 
+        "Crypto/Forex Invest"
+    ])
+    note = st.text_input("Short description (e.g., 'Data bundle')")
+    
+    submit = st.form_submit_button("Log Transaction")
+
+    if submit:
+        if amount > 0:
+            # Read current data to append to it
+            existing_data = conn.read(worksheet="Sheet1")
+            
+            # Create the new row
+            new_row = pd.DataFrame([{
+                "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "Amount": amount,
+                "Category": category,
+                "Description": note
+            }])
+            
+            # Update the Google Sheet
+            updated_df = pd.concat([existing_data, new_row], ignore_index=True)
+            conn.update(worksheet="Sheet1", data=updated_df)
+            
+            st.success(f"✅ {amount} GHS logged to {category}!")
+            st.balloons()
+        else:
+            st.warning("You can't log 0 GHS, Tony. Stay sharp!")
+
+# Show Recent History
+st.divider()
+st.subheader("Recent Activity")
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    existing_data = conn.read(worksheet="Sheet1", ttl=5)
-    st.success("✅ Connection Successful! The bridge is open.")
-    st.dataframe(existing_data)
-except Exception as e:
-    st.error("❌ Still can't reach the Google Sheet.")
-    st.info("Check if your tab name is exactly 'Sheet1' and the link in Secrets is correct.")
-    st.exception(e) # This will show the full error for us to analyze
+    data = conn.read(worksheet="Sheet1", ttl=5)
+    st.dataframe(data.tail(5), use_container_width=True)
+except:
+    st.info("Log your first expense to see the history here!")
